@@ -1,0 +1,6 @@
+bin/
+.vscode/
+sounds/
+
+.DS_Store
+designdoc.md
