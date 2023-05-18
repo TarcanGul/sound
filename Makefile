@@ -1,8 +1,9 @@
 SRC := src/
 BIN := bin/
 
-CC := g++
+CC := clang++
 FLAGS := -std=c++11
+FRAMEWORKS := -framework AudioToolbox -framework Foundation
 
 TARGET := $(BIN)sound
 SOURCES := $(wildcard $(SRC)*.cpp)
@@ -11,9 +12,11 @@ OBJECTS := $(patsubst $(SRC)%.cpp, $(BIN)%.o, $(SOURCES))
 all : $(TARGET) 
 	@echo Build complete!
 
+# Making the final executible.
 $(TARGET): $(OBJECTS)
-	$(CC) $(FLAGS) $(OBJECTS) -o $(TARGET)
+	$(CC) $(FLAGS) $(OBJECTS) $(FRAMEWORKS) -o $(TARGET)
 
+# Building the object files.
 $(BIN)%.o: $(SRC)%.cpp
 	$(CC) $(FLAGS) -c $< -o $@
 
