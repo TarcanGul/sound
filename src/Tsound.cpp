@@ -35,11 +35,8 @@ void TSound::playSound(std::string file) {
     fileStream.seekg(0, std::ios::end);
     size_t length = fileStream.tellg();
     fileStream.seekg(0, std::ios::beg);
-
-
     
     byte * fileStreamBytes = new byte[length];
-
 
     std::cout << "Length of the file in bytes is " << length << std::endl;
 
@@ -79,6 +76,11 @@ void TSound::playSound(std::string file) {
     SoundPlaybackData * data = new SoundPlaybackData();
     data->buffer = &fileStreamBytes[44]; //start of audio data in wav
     data->length = audioDataSize;
+    data->isPlayDone = false;
+    data->isReadDone = false;
+    data->buffersRead = 0;
+    data->bufferSize = 0x10000;
+    data->buffersCount = data->length / data->bufferSize;
 
     // Set description.
     // https://developer.apple.com/documentation/coreaudiotypes/audiostreambasicdescription?language=objc
@@ -87,62 +89,46 @@ void TSound::playSound(std::string file) {
     AudioStreamBasicDescription desc = {0};
     desc.mSampleRate = sampleRate;
     desc.mFormatID = kAudioFormatLinearPCM;
-    desc.mBitsPerChannel = bitsPerSample / numOfChannels;
-    desc.mFramesPerPacket = 1;
+    desc.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+    desc.mBitsPerChannel = bitsPerSample;
+    desc.mFramesPerPacket = 1; // For uncompressed audio, packets == frames.
     desc.mChannelsPerFrame = numOfChannels;
-    desc.mBytesPerFrame = 2;
-    desc.mBytesPerPacket = 2;
-    AudioQueueRef queue;
+    desc.mBytesPerFrame = 4;
+    desc.mBytesPerPacket = 4;
 
     // Create new audio queue
-    OSStatus status = AudioQueueNewOutput(&desc, outputCallback, data, NULL, NULL, 0, &queue);
+    OSStatus status = AudioQueueNewOutput(&desc, outputCallback, data, NULL, kCFRunLoopCommonModes, 0, &data->queue);
 
     if(status != noErr) {
         printf("New Queue Status: %d\n", (int) (status));
         return;
-    }
-    size_t buffer_size = 256;
+    } 
 
-    int numOfBuffers = data->length / buffer_size;
-
+    unsigned int initNumBuffers = 3;
     // // The queue will consist of buffers.
-    AudioQueueBufferRef buffers[numOfBuffers];
-    int curPos = 0;
+    AudioQueueBufferRef buffers[initNumBuffers];
 
-    std::cout << "Writing " << numOfBuffers << " buffers.";
+    std::cout << "Writing " << data->buffersCount << " buffers.";
 
-    for(int i = 0; i < numOfBuffers; ++i) {
-        OSStatus allocateStatus = AudioQueueAllocateBuffer(queue, buffer_size, &buffers[i]);
-        buffers[i]->mAudioDataByteSize = buffer_size;
-        // Need memcpy the buffer.
-        memcpy(buffers[i]->mAudioData, &data->buffer[curPos], buffer_size);
+    for(int i = 0; i < initNumBuffers; ++i) {
+        OSStatus allocateStatus = AudioQueueAllocateBuffer(data->queue, data->bufferSize, &buffers[i]);
         if(allocateStatus != noErr) {
-            printf("Allocate Status: %d\n", (int) status);
+            printf("Allocate Status: %d\n", (int) allocateStatus);
             return;
         }
-        curPos += buffer_size;
-        OSStatus enqueueStatus = AudioQueueEnqueueBuffer(queue, buffers[i], 0, NULL);
-        if(enqueueStatus != noErr) {
-            printf("Enqueue Status: %d\n", (int) status);
-            return;
-        }
+        outputCallback(data, data->queue, buffers[i]);
     }
 
-    printf("playing back...\n");
-    unsigned int outNumberOfFrames;
+    OSStatus playbackStatus = AudioQueueStart(data->queue, NULL);
 
-    OSStatus primeStatus = AudioQueuePrime(queue, 0, &outNumberOfFrames);
+    getchar();
 
-    if(primeStatus != noErr) {
-        printf("Prime Status: %d\n", (int) status);
-        return;
-    }
+    AudioQueueDispose(data->queue, true);
 
-    std::cout << outNumberOfFrames << " frames are decoded." << std::endl;
-
-    OSStatus playbackStatus = AudioQueueStart(queue, 0);
-
-    printf("done.\n");
+    data->isPlayDone = true;
+    delete[] fileStreamBytes;
+    delete data;
+    PRINT(playbackStatus);
 }
 
 void atAudioQueueOutput(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer) {
@@ -151,32 +137,46 @@ void atAudioQueueOutput(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
     // inAQ is the queue we own.
     // Data flows from the buffer to inAQ, we have to fill the buffer. 
 
-    std::cout << "In callback\n";
-
     // Might have to split the audio to packets.
-    //Set buffer byte size.
+
     SoundPlaybackData * currentData = (SoundPlaybackData *) inUserData;
-    inBuffer->mAudioDataByteSize = (UInt32) currentData->length;
+
+    if(currentData->isReadDone) {
+        PRINT("Reading done.");
+        return;
+    }
     
-    //Writing the audio file to buffer.
-    std::memcpy(inBuffer, currentData->buffer, currentData->length);
-    std::cout << "Wrote to the buffer" << currentData->length << "bytes.\n";
+    inBuffer->mAudioDataByteSize = inBuffer->mAudioDataBytesCapacity; 
+    
+    unsigned int curPos = currentData->buffersRead * currentData->bufferSize;
+
+    memcpy(inBuffer->mAudioData, (byte *) &currentData->buffer[curPos], inBuffer->mAudioDataBytesCapacity);
+    inBuffer->mAudioDataByteSize = inBuffer->mAudioDataBytesCapacity;
+    
+    OSStatus enqueueStatus = AudioQueueEnqueueBuffer(inAQ, inBuffer, 0, NULL);
+
+    if(enqueueStatus != noErr) {
+        printf("Enqueue Status: %d\n", (int) enqueueStatus);
+        return;
+    }
+
+    // unsigned int outBufferPrepared;
+    // OSStatus primeStatus = AudioQueuePrime(inAQ, 0, &outBufferPrepared);
+    // std::cout << "Numbers of frame prepared:";
+    // PRINT(outBufferPrepared);
+    PRINT(currentData->buffersRead);
+    ++currentData->buffersRead;
+
+    if(currentData->buffersRead >= currentData->buffersCount) {
+        currentData->isReadDone = true;
+        AudioQueueStop(inAQ, false);
+        std::cout << "Buffers are read\n";
+        return;
+    }
 }
 
 void printBytes(byte bytes[], int size) {
     for(int i =0; i < size; ++i) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << (unsigned) bytes[i] << ' ';
     }
-}
-
-// Assumes little endian.
-unsigned int interpretBytesAsInteger(byte bytes[], int size) {
-    unsigned int result = 0;
-
-    for(int i = size-1; i >= 0; --i){
-        result <<= 8;
-        result |= (unsigned int) bytes[i];
-    }
-
-    return result;
 }

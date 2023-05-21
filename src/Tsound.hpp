@@ -9,6 +9,12 @@ typedef unsigned char byte;
 struct SoundPlaybackData {
     byte * buffer;
     size_t length; // length in bytes
+    AudioQueueRef queue;
+    bool isPlayDone;
+    bool isReadDone;
+    int buffersCount;
+    int bufferSize;
+    size_t buffersRead;
 };
 
 // Callbacks
