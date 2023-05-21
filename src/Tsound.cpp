@@ -2,10 +2,6 @@
 
 #define PRINT(s) std::cout << s << std::endl;
 
-void printBytes(byte bytes[], int size);
-unsigned int interpretBytesAsInteger(byte bytes[], int size);
-
-
 unsigned int interpretInt(byte bytes[], int size) {
     unsigned int result = 0;
 
@@ -82,14 +78,11 @@ void TSound::playSound(std::string file) {
     data->bufferSize = 0x10000;
     data->buffersCount = data->length / data->bufferSize;
 
-    // Set description.
-    // https://developer.apple.com/documentation/coreaudiotypes/audiostreambasicdescription?language=objc
-
     AudioQueueOutputCallback outputCallback = atAudioQueueOutput;
     AudioStreamBasicDescription desc = {0};
     desc.mSampleRate = sampleRate;
     desc.mFormatID = kAudioFormatLinearPCM;
-    desc.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+    desc.mFormatFlags = kAudioFormatFlagIsSignedInteger;
     desc.mBitsPerChannel = bitsPerSample;
     desc.mFramesPerPacket = 1; // For uncompressed audio, packets == frames.
     desc.mChannelsPerFrame = numOfChannels;
@@ -103,14 +96,11 @@ void TSound::playSound(std::string file) {
         printf("New Queue Status: %d\n", (int) (status));
         return;
     } 
-
-    unsigned int initNumBuffers = 3;
-    // // The queue will consist of buffers.
-    AudioQueueBufferRef buffers[initNumBuffers];
+    AudioQueueBufferRef buffers[NUM_OF_CONCRETE_BUFFERS];
 
     std::cout << "Writing " << data->buffersCount << " buffers.";
 
-    for(int i = 0; i < initNumBuffers; ++i) {
+    for(int i = 0; i < NUM_OF_CONCRETE_BUFFERS; ++i) {
         OSStatus allocateStatus = AudioQueueAllocateBuffer(data->queue, data->bufferSize, &buffers[i]);
         if(allocateStatus != noErr) {
             printf("Allocate Status: %d\n", (int) allocateStatus);
@@ -172,11 +162,5 @@ void atAudioQueueOutput(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
         AudioQueueStop(inAQ, false);
         std::cout << "Buffers are read\n";
         return;
-    }
-}
-
-void printBytes(byte bytes[], int size) {
-    for(int i =0; i < size; ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (unsigned) bytes[i] << ' ';
     }
 }

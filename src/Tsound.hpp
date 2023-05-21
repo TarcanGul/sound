@@ -1,8 +1,9 @@
 #include <iostream>
-// #include <Foundation/Foundation.h>
 #include <AudioToolbox/AudioQueue.h>
 #include <AudioToolbox/AudioToolbox.h>
 #include <fstream>
+
+#define NUM_OF_CONCRETE_BUFFERS 3
 
 typedef unsigned char byte;
 
