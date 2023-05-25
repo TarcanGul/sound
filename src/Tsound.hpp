@@ -5,6 +5,8 @@
 
 #define NUM_OF_CONCRETE_BUFFERS 3
 
+#define WAV_META_LEN 44
+
 typedef unsigned char byte;
 
 struct SoundPlaybackData {
@@ -19,7 +21,7 @@ struct SoundPlaybackData {
 };
 
 // Callbacks
-void atAudioQueueOutput(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer);
+void atQueueEmpty(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer);
 
 class TSound {
     public:

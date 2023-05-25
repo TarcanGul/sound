@@ -27,58 +27,44 @@ void TSound::playSound(std::string file) {
     //Assume file is in the directory.
     std::ifstream fileStream(file, std::ios::binary);
 
-    //Get file size.
-    fileStream.seekg(0, std::ios::end);
-    size_t length = fileStream.tellg();
-    fileStream.seekg(0, std::ios::beg);
-    
-    byte * fileStreamBytes = new byte[length];
+    byte * fileMetadata = new byte[WAV_META_LEN]; // This value will change based on other file types.
 
-    std::cout << "Length of the file in bytes is " << length << std::endl;
+    fileStream.read((char *) fileMetadata, WAV_META_LEN);
 
-    fileStream.read((char *) fileStreamBytes, length);
+    unsigned int numOfChannels = interpretInt(&fileMetadata[22], 2);
+    unsigned int sampleRate = interpretInt(&fileMetadata[24], 4);
+    unsigned int bitsPerSample = interpretInt(&fileMetadata[34], 2);
+    unsigned int audioDataSize = interpretInt(&fileMetadata[40], 4);
+
+    byte * audioData = new byte[audioDataSize];
+
+    std::cout << "Audio data size is " << audioDataSize << std::endl;
+
+    fileStream.read((char *) audioData, audioDataSize);
 
     // Read the metadata about file.
     // https://docs.fileformat.com/audio/wav/
     
-    std::string riff = interpretString(fileStreamBytes, 4);
-    int fileSize = interpretInt(&fileStreamBytes[4], 4);
-    std::string wave = interpretString(&fileStreamBytes[8], 4);
-    std::string fmt = interpretString(&fileStreamBytes[12], 4);
-    unsigned int sizeOfChunk = interpretInt(&fileStreamBytes[16], 4);
-    unsigned int fileFormat = interpretInt(&fileStreamBytes[20], 2);
-    unsigned int numOfChannels = interpretInt(&fileStreamBytes[22], 2);
-    unsigned int sampleRate = interpretInt(&fileStreamBytes[24], 4);
-    unsigned int dataRate = interpretInt(&fileStreamBytes[28], 4);
-    unsigned int blockAlignment = interpretInt(&fileStreamBytes[32], 2);
-    unsigned int bitsPerSample = interpretInt(&fileStreamBytes[34], 2);
-    std::string dataHeader = interpretString(&fileStreamBytes[36], 4);
-    unsigned int audioDataSize = interpretInt(&fileStreamBytes[40], 4); 
-
-    PRINT(riff);
-    PRINT(fileSize);
-    PRINT(wave);
-    PRINT(fmt);
-    PRINT(sizeOfChunk);
-    PRINT(fileFormat);
-    PRINT(numOfChannels);
-    PRINT(sampleRate);
-    PRINT(dataRate);
-    PRINT(bitsPerSample);
-    PRINT(blockAlignment);
-    PRINT(dataHeader);
-    PRINT(audioDataSize);
+    // std::string riff = interpretString(fileStreamBytes, 4);
+    // int fileSize = interpretInt(&fileStreamBytes[4], 4);
+    // std::string wave = interpretString(&fileStreamBytes[8], 4);
+    // std::string fmt = interpretString(&fileStreamBytes[12], 4);
+    // unsigned int sizeOfChunk = interpretInt(&fileStreamBytes[16], 4);
+    // unsigned int fileFormat = interpretInt(&fileStreamBytes[20], 2);
+    // unsigned int dataRate = interpretInt(&fileStreamBytes[28], 4);
+    // unsigned int blockAlignment = interpretInt(&fileStreamBytes[32], 2);
+    // std::string dataHeader = interpretString(&fileStreamBytes[36], 4);
 
     SoundPlaybackData * data = new SoundPlaybackData();
-    data->buffer = &fileStreamBytes[44]; //start of audio data in wav
+    data->buffer = audioData;
     data->length = audioDataSize;
     data->isPlayDone = false;
     data->isReadDone = false;
     data->buffersRead = 0;
     data->bufferSize = 0x10000;
-    data->buffersCount = data->length / data->bufferSize;
+    data->buffersCount = (data->length / data->bufferSize) + 1; // Plus one is for covering the floor of the division.
 
-    AudioQueueOutputCallback outputCallback = atAudioQueueOutput;
+    AudioQueueOutputCallback outputCallback = atQueueEmpty;
     AudioStreamBasicDescription desc = {0};
     desc.mSampleRate = sampleRate;
     desc.mFormatID = kAudioFormatLinearPCM;
@@ -116,12 +102,13 @@ void TSound::playSound(std::string file) {
     AudioQueueDispose(data->queue, true);
 
     data->isPlayDone = true;
-    delete[] fileStreamBytes;
+    delete fileMetadata;
+    delete[] audioData;
     delete data;
     PRINT(playbackStatus);
 }
 
-void atAudioQueueOutput(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer) {
+void atQueueEmpty(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer) {
     
     // inBuffer will be the actual queue to write to. 
     // inAQ is the queue we own.
@@ -150,11 +137,6 @@ void atAudioQueueOutput(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
         return;
     }
 
-    // unsigned int outBufferPrepared;
-    // OSStatus primeStatus = AudioQueuePrime(inAQ, 0, &outBufferPrepared);
-    // std::cout << "Numbers of frame prepared:";
-    // PRINT(outBufferPrepared);
-    PRINT(currentData->buffersRead);
     ++currentData->buffersRead;
 
     if(currentData->buffersRead >= currentData->buffersCount) {
