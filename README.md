@@ -3,3 +3,8 @@
 Uses Apple Audio Queue Services to play wav files.
 
 Only works for MacOS, since we are using [Audio Queue Services](https://developer.apple.com/documentation/audiotoolbox/audio_queue_services?language=objc)
+
+Usage:
+
+- `make`
+- `./bin/sound <Any wav file>`
