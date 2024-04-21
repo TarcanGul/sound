@@ -44,16 +44,6 @@ void TSound::playSound(std::string file) {
 
     // Read the metadata about file.
     // https://docs.fileformat.com/audio/wav/
-    
-    // std::string riff = interpretString(fileStreamBytes, 4);
-    // int fileSize = interpretInt(&fileStreamBytes[4], 4);
-    // std::string wave = interpretString(&fileStreamBytes[8], 4);
-    // std::string fmt = interpretString(&fileStreamBytes[12], 4);
-    // unsigned int sizeOfChunk = interpretInt(&fileStreamBytes[16], 4);
-    // unsigned int fileFormat = interpretInt(&fileStreamBytes[20], 2);
-    // unsigned int dataRate = interpretInt(&fileStreamBytes[28], 4);
-    // unsigned int blockAlignment = interpretInt(&fileStreamBytes[32], 2);
-    // std::string dataHeader = interpretString(&fileStreamBytes[36], 4);
 
     SoundPlaybackData * data = new SoundPlaybackData();
     data->buffer = audioData;
@@ -79,7 +69,7 @@ void TSound::playSound(std::string file) {
     OSStatus status = AudioQueueNewOutput(&desc, outputCallback, data, NULL, kCFRunLoopCommonModes, 0, &data->queue);
 
     if(status != noErr) {
-        printf("New Queue Status: %d\n", (int) (status));
+        std::cout << "New Queue Status: " << status << std::endl;
         return;
     } 
     AudioQueueBufferRef buffers[NUM_OF_CONCRETE_BUFFERS];
@@ -89,7 +79,7 @@ void TSound::playSound(std::string file) {
     for(int i = 0; i < NUM_OF_CONCRETE_BUFFERS; ++i) {
         OSStatus allocateStatus = AudioQueueAllocateBuffer(data->queue, data->bufferSize, &buffers[i]);
         if(allocateStatus != noErr) {
-            printf("Allocate Status: %d\n", (int) allocateStatus);
+            std::cout << "Allocate Status:" << allocateStatus << std::endl;
             return;
         }
         outputCallback(data, data->queue, buffers[i]);
@@ -133,7 +123,7 @@ void atQueueEmpty(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBu
     OSStatus enqueueStatus = AudioQueueEnqueueBuffer(inAQ, inBuffer, 0, NULL);
 
     if(enqueueStatus != noErr) {
-        printf("Enqueue Status: %d\n", (int) enqueueStatus);
+        std::cout << "Enqueue Status: " << enqueueStatus << std::endl;
         return;
     }
 
